@@ -1,6 +1,7 @@
 SignLens
 A Computer Vision project for recognizing Sign Language using hand landmarks and deep learning.
 📁 Project Structure
+
 ```
 SignLens/
 │
@@ -26,4 +27,9 @@ SignLens/
 └── README.md
 
 ```
+
+🔄 File Renaming
+
+Src/best (1).pt → models/yolo_best_weights.pt
+Src/final_project.ipynb → notebooks/train_yolo_best.ipynb
 
