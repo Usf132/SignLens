@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-model = YOLO("models\\Model.pt")
+model = YOLO(r"F:\NTI(VISION)\New folder\SignLens\models\best_50_epoch.pt")
 
 ASL_LABELS = {
     0: "A",
@@ -41,7 +41,7 @@ ASL_LABELS = {
 
 }
 
-client = ElevenLabs(api_key=os.getenv('ELEVENLABS_API_KEY'))
+client = ElevenLabs(api_key="sk_a92f97f9dc2468187575c37f6c9a553e99801a24a384fe02")
 
 def predict_asl_sign(frame, Confid=70):
 
