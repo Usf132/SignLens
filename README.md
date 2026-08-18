@@ -24,12 +24,20 @@ SignLens/
 │   └── training_curves.png
 │
 ├── src/
+│   ├── __pycache__/
 │   ├── __init__.py
+│   ├── App.py
+│   ├── Backend.py
 │   ├── landmark.py
-│   └── recognizer.py
+│   ├── recognizer.py
+│   ├── sentence.py
+│   ├── stabilizer.py
+│   └── yolo_detector.py
 │
 ├── LICENSE
-└── README.md
+├── README.md
+└── requirements.txt
+
 ```
 ---
 ### 🔄 File Renaming
