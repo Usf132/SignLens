@@ -27,21 +27,3 @@ SignLens/
 
 ```
 
-🧠 Models
-
-landmark.pt — Landmark-based sign language classifier.
-yolo_best_weights.pt — YOLO model weights.
-class_mapping.json — Maps model classes to their corresponding signs.
-
-📊 Outputs
-The outputs/ directory contains training results, extracted landmark data, failed landmark extractions, and evaluation visualizations.
-🛠️ Technologies
-
-Python
-Computer Vision
-YOLO
-Hand Landmarks
-Deep Learning
-PyTorch
-Jupyter Notebook
-
