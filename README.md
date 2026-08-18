@@ -1,6 +1,7 @@
 SignLens
 A Computer Vision project for recognizing Sign Language using hand landmarks and deep learning.
-📁 Project Structure
+
+### 📁 Project Structure
 
 ```
 SignLens/
