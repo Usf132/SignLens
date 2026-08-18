@@ -9,6 +9,7 @@ SignLens/
 ├── models/
 │   ├── class_mapping.json
 │   ├── landmark.pt
+│   ├── landmark_model.keras
 │   └── yolo_best_weights.pt
 │
 ├── notebooks/
