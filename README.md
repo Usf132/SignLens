@@ -22,11 +22,12 @@ SignLens/
 │   └── training_curves.png
 │
 ├── src/
-│   └── __init__.py
+│   ├── __init__.py
+│   ├── landmark.py
+│   └── recognizer.py
 │
 ├── LICENSE
 └── README.md
-
 ```
 ---
 ### 🔄 File Renaming
