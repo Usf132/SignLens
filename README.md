@@ -28,9 +28,10 @@ SignLens/
 └── README.md
 
 ```
-
-🔄 File Renaming
+---
+### 🔄 File Renaming
 
 Src/best (1).pt → models/yolo_best_weights.pt
+
 Src/final_project.ipynb → notebooks/train_yolo_best.ipynb
 
