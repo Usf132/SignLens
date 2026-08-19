@@ -15,7 +15,7 @@ import time
 import plotly.graph_objects as go
 import toml
 import hashlib
-from streamlit_camera_input_live import camera_input_live
+from camera_input_live import camera_input_live
 from backend import predict_asl_sign_lm, Text_to_speech
 
 st.set_page_config(initial_sidebar_state="collapsed")
