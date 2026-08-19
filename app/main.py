@@ -15,6 +15,7 @@ import time
 import plotly.graph_objects as go
 import toml
 import hashlib
+from streamlit_camera_input_live import camera_input_live
 from backend import predict_asl_sign_lm, Text_to_speech
 
 st.set_page_config(initial_sidebar_state="collapsed")
@@ -48,11 +49,11 @@ with st.sidebar:
         st.metric("Confidence", "95.02%", "Threshold: 70%")
     with col2:
         fps_placeholder = st.empty()
-        fps_placeholder.metric("Captures", "0")
+        fps_placeholder.metric("Frames", "0")
 
     # Confidence Threshold
     confidence = st.slider("Confidence Threshold", 0, 100, 55)
-    stability_frames = st.slider("Stability Frames (Buffer)", 1, 30, 10, help="Not used in snapshot mode")
+    stability_frames = st.slider("Stability Frames (Buffer)", 1, 30, 10, help="Number of consecutive matching frames needed before a letter is added")
 
 st.sidebar.divider()
 
@@ -108,16 +109,18 @@ if 'last_video_frame' not in st.session_state:
     st.session_state.last_video_frame = None
 if 'vid_frame_pos' not in st.session_state:
     st.session_state.vid_frame_pos = 0
-if 'capture_count' not in st.session_state:
-    st.session_state.capture_count = 0
-if 'last_capture_hash' not in st.session_state:
-    st.session_state.last_capture_hash = None
+if 'frame_count' not in st.session_state:
+    st.session_state.frame_count = 0
+if 'last_frame_hash' not in st.session_state:
+    st.session_state.last_frame_hash = None
 if 'last_annotated_frame' not in st.session_state:
     st.session_state.last_annotated_frame = None
 if 'last_letter' not in st.session_state:
     st.session_state.last_letter = ""
 if 'last_conf' not in st.session_state:
     st.session_state.last_conf = 0.0
+if 'prev_frame_time' not in st.session_state:
+    st.session_state.prev_frame_time = time.time()
 
 
 if page == " Live Translation":
@@ -128,7 +131,7 @@ if page == " Live Translation":
     """
     st.markdown(box_html, unsafe_allow_html=True)
     st.header("Live Camera Feed & Translation")
-    st.caption("Point your hand at the camera and click the capture button to translate each sign.")
+    st.caption("Hold your hand steady in front of the camera — the feed updates and translates automatically.")
 
     col_video, col_text = st.columns([2, 1])
 
@@ -169,7 +172,9 @@ if page == " Live Translation":
         graph_placeholder = st.empty()
 
     with col_video:
-        camera_image = st.camera_input("Capture a sign", label_visibility="collapsed")
+        # camera_input_live pushes a fresh frame automatically every couple
+        # of seconds without needing a click, and doesn't rely on WebRTC.
+        live_frame = camera_input_live(debounce=800)
 
         video_placeholder = st.empty()
 
@@ -179,19 +184,24 @@ if page == " Live Translation":
             st.session_state.conf_history.clear()
             st.session_state.last_detected_letter = ""
             st.session_state.letter_counter = 0
-            st.session_state.capture_count = 0
-            st.session_state.last_capture_hash = None
+            st.session_state.frame_count = 0
+            st.session_state.last_frame_hash = None
 
-    if camera_image is not None:
-        image_bytes = camera_image.getvalue()
-        image_hash = hashlib.md5(image_bytes).hexdigest()
+    if live_frame is not None:
+        frame_bytes = live_frame.getvalue()
+        frame_hash = hashlib.md5(frame_bytes).hexdigest()
 
-        # Only run detection when a genuinely new photo was captured
-        if image_hash != st.session_state.last_capture_hash:
-            st.session_state.last_capture_hash = image_hash
-            st.session_state.capture_count += 1
+        # Only run detection when the component actually delivered a new frame
+        if frame_hash != st.session_state.last_frame_hash:
+            st.session_state.last_frame_hash = frame_hash
+            st.session_state.frame_count += 1
 
-            file_bytes = np.frombuffer(image_bytes, np.uint8)
+            now = time.time()
+            elapsed = now - st.session_state.prev_frame_time
+            fps = 1 / elapsed if elapsed > 0 else 0.0
+            st.session_state.prev_frame_time = now
+
+            file_bytes = np.frombuffer(frame_bytes, np.uint8)
             frame = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
 
             annotated_frame, letter, conf = predict_asl_sign_lm(frame, confidence)
@@ -206,21 +216,38 @@ if page == " Live Translation":
             if conf_percent >= confidence:
                 st.session_state.miss_streak = 0
 
-                if letter == "Delete":
-                    if len(st.session_state.sequence) > 0:
-                        st.session_state.sequence.pop()
-                elif letter == "Clear":
-                    st.session_state.sequence.clear()
-                elif letter == "Space":
-                    if len(st.session_state.sequence) == 0 or st.session_state.sequence[-1] != " ":
-                        st.session_state.sequence.append(" ")
+                if letter == st.session_state.last_detected_letter:
+                    st.session_state.letter_counter += 1
                 else:
-                    if len(st.session_state.sequence) == 0 or st.session_state.sequence[-1] != letter:
-                        st.session_state.sequence.append(letter)
+                    st.session_state.last_detected_letter = letter
+                    st.session_state.letter_counter = 1
+
+                if st.session_state.letter_counter == stability_frames:
+                    if letter == "Delete":
+                        if len(st.session_state.sequence) > 0:
+                            st.session_state.sequence.pop()
+                        st.session_state.letter_counter = 0
+                        st.session_state.last_detected_letter = ""
+                    elif letter == "Clear":
+                        st.session_state.sequence.clear()
+                        st.session_state.letter_counter = 0
+                        st.session_state.last_detected_letter = ""
+                    elif letter == "Space":
+                        if len(st.session_state.sequence) == 0 or st.session_state.sequence[-1] != " ":
+                            st.session_state.sequence.append(" ")
+                        st.session_state.letter_counter = 0
+                        st.session_state.last_detected_letter = ""
+                    else:
+                        if len(st.session_state.sequence) == 0 or st.session_state.sequence[-1] != letter:
+                            st.session_state.sequence.append(letter)
             else:
                 st.session_state.miss_streak += 1
+                if st.session_state.miss_streak > 5:
+                    st.session_state.letter_counter = 0
+                    st.session_state.last_detected_letter = ""
+                    st.session_state.miss_streak = 0
 
-        fps_placeholder.metric("Captures", str(st.session_state.capture_count))
+            fps_placeholder.metric("Frames", str(st.session_state.frame_count))
 
         if st.session_state.last_annotated_frame is not None:
             video_placeholder.image(st.session_state.last_annotated_frame, channels="BGR", use_container_width=True)
@@ -233,7 +260,7 @@ if page == " Live Translation":
     else:
         text_placeholder.markdown(
             f"<div style='background-color: {sidebar_color}; padding: 30px; border-radius: 10px;'>"
-            f"<h1 style='text-align: center; font-size: 40px; color: {primary_color}; margin:0;'>Ready</h1></div>",
+            f"<h1 style='text-align: center; font-size: 40px; color: {primary_color}; margin:0;'>Starting camera...</h1></div>",
             unsafe_allow_html=True
         )
 
@@ -247,7 +274,7 @@ if page == " Live Translation":
 
     fig = go.Figure(data=go.Scatter(y=list(st.session_state.conf_history), mode='lines', line=dict(color=primary_color)))
     fig.update_layout(height=200, margin=dict(l=0, r=0, t=0, b=0), yaxis=dict(range=[0, 100]), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-    graph_placeholder.plotly_chart(fig, use_container_width=True, key=f"conf_chart_{st.session_state.capture_count}")
+    graph_placeholder.plotly_chart(fig, use_container_width=True, key=f"conf_chart_{st.session_state.frame_count}")
 
 
 elif page == " Upload Video":
