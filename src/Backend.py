@@ -1,69 +1,84 @@
 import cv2
 import numpy as np
-from ultralytics import YOLO
-from elevenlabs.client import ElevenLabs
-import streamlit as st
 import os
+import json
 from dotenv import load_dotenv
+from elevenlabs.client import ElevenLabs
+
+from yolo_detector import YOLOHandDetector
+from landmark import extract_landmarks, extract_features
+from recognizer import SignRecognizer
+from stabilizer import PredictionStabilizer
+from sentence import SentenceBuilder
+
 
 load_dotenv()
 
-model = YOLO(r"F:\NTI(VISION)\New folder\SignLens\models\best_50_epoch.pt")
+client = ElevenLabs(api_key=os.getenv('ELEVENLABS_API_KEY'))
 
-ASL_LABELS = {
-    0: "A",
-    1: "B",
-    2: "C",
-    3: "D",
-    4: "E",
-    5: "F",
-    6: "G",
-    7: "H",
-    8: "I",
-    9: "J",
-    10: "K",
-    11: "L",
-    12: "M",
-    13: "N",
-    14: "O",
-    15: "P",
-    16: "Q",
-    17: "R",
-    18: "S",
-    19: "T",
-    20: "U",
-    21: "V",
-    22: "W",
-    23: "X",
-    24: "Y",
-    25: "Z"
-    #26: " "
+yolo_detector = YOLOHandDetector(
+    model_path="models\\yolo_best_weights.pt",
+    confidence=0.5
+)
 
-}
+sign_recognizer = SignRecognizer(
+    model_path="models\\landmark_model.keras",
+    metadata_path="models\\landmark_meta.json"
+)
 
-client = ElevenLabs(api_key="sk_a92f97f9dc2468187575c37f6c9a553e99801a24a384fe02")
+stabilizer = PredictionStabilizer(window_size=5, min_confidence=0.70)
+sentence_builder = SentenceBuilder()
 
-def predict_asl_sign(frame, Confid=70):
 
-    conf_value = float(Confid) / 100.0 if Confid > 1.0 else float(Confid)
+def predict_asl_sign_lm(frame_bgr, confidence_threshold):
 
-    
-    results = model(frame, imgsz=512, conf=conf_value, verbose=False)
-    
-    predicted_letter = "..."
+   
+    annotated_frame = frame_bgr.copy()
+    letter = ""
     confidence = 0.0
-    
-    annotated_frame = results[0].plot()
-    
-    if len(results[0].boxes) > 0:
-        box = results[0].boxes[0]
-        class_id = int(box.cls[0])       
-        confidence = float(box.conf[0])     
-        predicted_letter = ASL_LABELS.get(class_id, "...") 
+
+  
+    cropped_hand, box = yolo_detector.detect(frame_bgr)
+
+    if cropped_hand is not None and box is not None:
+        x1, y1, x2, y2 = box
+
         
-    return annotated_frame,predicted_letter, confidence
+        
+
+       
+        cropped_with_landmarks, landmarks = extract_landmarks(cropped_hand)
+
+        if landmarks is not None:
+
+            annotated_frame[y1:y2, x1:x2] = cropped_with_landmarks
+            
+            features = extract_features(landmarks)
+
+        
+
+            if features is not None:
+               
+                pred_letter, pred_conf = sign_recognizer.predict(features)
+
+              
+                if pred_conf >= (confidence_threshold / 100.0):
+                    letter = pred_letter
+                    confidence = pred_conf
+
+        cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+
+    return annotated_frame, letter, confidence
+
 
 def Text_to_speech(text, voice_id):
+    if not text:
+        return None
+
+    if not os.getenv('ELEVENLABS_API_KEY'):
+        print("Error! ELEVENLABS_API_KEY is not set (check your .env file).")
+        return None
+
     try:
         audio_generator = client.text_to_speech.convert(
             text=text,
@@ -75,6 +90,3 @@ def Text_to_speech(text, voice_id):
     except Exception as e:
         print(f'Error! {e}')
         return None
-
-    
-
