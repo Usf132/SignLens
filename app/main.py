@@ -1,11 +1,3 @@
-import sys
-from pathlib import Path
-
-# Make the project root importable regardless of the working directory
-ROOT_DIR = Path(__file__).resolve().parent.parent
-if str(ROOT_DIR) not in sys.path:
-    sys.path.insert(0, str(ROOT_DIR))
-
 import streamlit as st
 import cv2
 import numpy as np
@@ -14,9 +6,7 @@ from collections import deque
 import time
 import plotly.graph_objects as go
 import toml
-import hashlib
-from camera_input_live import camera_input_live
-from backend import predict_asl_sign_lm, Text_to_speech
+from BLM2 import predict_asl_sign_lm, Text_to_speech
 
 st.set_page_config(initial_sidebar_state="collapsed")
 
@@ -27,9 +17,7 @@ st.set_page_config(
 )
 
 
-LOGO_PATH = ROOT_DIR / "assets" / "Logo.png"
-if LOGO_PATH.exists():
-    st.sidebar.image(str(LOGO_PATH), use_container_width=True)
+st.sidebar.image("data\\Logo.png", use_container_width=True)
 
 
 with st.sidebar:
@@ -49,11 +37,11 @@ with st.sidebar:
         st.metric("Confidence", "95.02%", "Threshold: 70%")
     with col2:
         fps_placeholder = st.empty()
-        fps_placeholder.metric("Frames", "0")
+        fps_placeholder.metric("FPS", "0.0")
 
     # Confidence Threshold
     confidence = st.slider("Confidence Threshold", 0, 100, 55)
-    stability_frames = st.slider("Stability Frames (Buffer)", 1, 30, 10, help="Number of consecutive matching frames needed before a letter is added")
+    stability_frames = st.slider("Stability Frames (Buffer)", 1, 30, 10, help="fps")
 
 st.sidebar.divider()
 
@@ -78,7 +66,7 @@ if st.sidebar.button("Save changes"):
     with open(".streamlit/config.toml", "w") as f:
         toml.dump(config, f)
 
-    st.sidebar.success("Done! Reload the page please!")
+    st.sidebar.success("Done! Relode the page please!")
 
 
 st.sidebar.divider()
@@ -97,6 +85,8 @@ if 'sequence' not in st.session_state:
     st.session_state.sequence = deque()
 if 'conf_history' not in st.session_state:
     st.session_state.conf_history = deque(maxlen=50)
+if 'run_camera' not in st.session_state:
+    st.session_state.run_camera = False
 if 'last_detected_letter' not in st.session_state:
     st.session_state.last_detected_letter = ""
 if 'letter_counter' not in st.session_state:
@@ -109,18 +99,6 @@ if 'last_video_frame' not in st.session_state:
     st.session_state.last_video_frame = None
 if 'vid_frame_pos' not in st.session_state:
     st.session_state.vid_frame_pos = 0
-if 'frame_count' not in st.session_state:
-    st.session_state.frame_count = 0
-if 'last_frame_hash' not in st.session_state:
-    st.session_state.last_frame_hash = None
-if 'last_annotated_frame' not in st.session_state:
-    st.session_state.last_annotated_frame = None
-if 'last_letter' not in st.session_state:
-    st.session_state.last_letter = ""
-if 'last_conf' not in st.session_state:
-    st.session_state.last_conf = 0.0
-if 'prev_frame_time' not in st.session_state:
-    st.session_state.prev_frame_time = time.time()
 
 
 if page == " Live Translation":
@@ -131,7 +109,6 @@ if page == " Live Translation":
     """
     st.markdown(box_html, unsafe_allow_html=True)
     st.header("Live Camera Feed & Translation")
-    st.caption("Hold your hand steady in front of the camera — the feed updates and translates automatically.")
 
     col_video, col_text = st.columns([2, 1])
 
@@ -172,109 +149,118 @@ if page == " Live Translation":
         graph_placeholder = st.empty()
 
     with col_video:
-        # camera_input_live pushes a fresh frame automatically every couple
-        # of seconds without needing a click, and doesn't rely on WebRTC.
-        live_frame = camera_input_live(debounce=800)
-
         video_placeholder = st.empty()
 
-        ctrl_clear = st.columns(1)[0]
-        if ctrl_clear.button("Clear", use_container_width=True):
+        # ctrl
+        ctrl1, ctrl2, ctrl3 = st.columns(3)
+        if ctrl1.button(" Start", use_container_width=True):
+            st.session_state.run_camera = True
+        if ctrl2.button(" Stop", use_container_width=True):
+            st.session_state.run_camera = False
+        if ctrl3.button("Clear", use_container_width=True):
             st.session_state.sequence.clear()
             st.session_state.conf_history.clear()
             st.session_state.last_detected_letter = ""
             st.session_state.letter_counter = 0
-            st.session_state.frame_count = 0
-            st.session_state.last_frame_hash = None
 
-    if live_frame is not None:
-        frame_bytes = live_frame.getvalue()
-        frame_hash = hashlib.md5(frame_bytes).hexdigest()
+    if st.session_state.run_camera:
+        cap = cv2.VideoCapture(0)
 
-        # Only run detection when the component actually delivered a new frame
-        if frame_hash != st.session_state.last_frame_hash:
-            st.session_state.last_frame_hash = frame_hash
-            st.session_state.frame_count += 1
+        if not cap.isOpened():
+            st.error("Couldn't access the camera. Make sure it's connected and not used by another app.")
+            st.session_state.run_camera = False
 
-            now = time.time()
-            elapsed = now - st.session_state.prev_frame_time
+        DETECTION_INTERVAL = 2
+
+        prev_time = time.time()
+        frame_index = 0
+        last_annotated_frame = None
+        last_letter = ""
+        last_conf = 0.0
+
+        while st.session_state.run_camera and cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            current_time = time.time()
+            elapsed = current_time - prev_time
             fps = 1 / elapsed if elapsed > 0 else 0.0
-            st.session_state.prev_frame_time = now
+            prev_time = current_time
 
-            file_bytes = np.frombuffer(frame_bytes, np.uint8)
-            frame = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+            fps_placeholder.metric("FPS", f"{fps:.1f}")
 
-            annotated_frame, letter, conf = predict_asl_sign_lm(frame, confidence)
+            run_detection = (frame_index % DETECTION_INTERVAL == 0)
 
-            st.session_state.last_annotated_frame = annotated_frame
-            st.session_state.last_letter = letter
-            st.session_state.last_conf = conf
-
-            conf_percent = conf * 100
-            st.session_state.conf_history.append(conf_percent)
-
-            if conf_percent >= confidence:
-                st.session_state.miss_streak = 0
-
-                if letter == st.session_state.last_detected_letter:
-                    st.session_state.letter_counter += 1
-                else:
-                    st.session_state.last_detected_letter = letter
-                    st.session_state.letter_counter = 1
-
-                if st.session_state.letter_counter == stability_frames:
-                    if letter == "Delete":
-                        if len(st.session_state.sequence) > 0:
-                            st.session_state.sequence.pop()
-                        st.session_state.letter_counter = 0
-                        st.session_state.last_detected_letter = ""
-                    elif letter == "Clear":
-                        st.session_state.sequence.clear()
-                        st.session_state.letter_counter = 0
-                        st.session_state.last_detected_letter = ""
-                    elif letter == "Space":
-                        if len(st.session_state.sequence) == 0 or st.session_state.sequence[-1] != " ":
-                            st.session_state.sequence.append(" ")
-                        st.session_state.letter_counter = 0
-                        st.session_state.last_detected_letter = ""
-                    else:
-                        if len(st.session_state.sequence) == 0 or st.session_state.sequence[-1] != letter:
-                            st.session_state.sequence.append(letter)
+            if run_detection:
+              
+  
+                annotated_frame, letter, conf = predict_asl_sign_lm(frame, confidence)
+                last_annotated_frame, last_letter, last_conf = annotated_frame, letter, conf
             else:
-                st.session_state.miss_streak += 1
-                if st.session_state.miss_streak > 5:
-                    st.session_state.letter_counter = 0
-                    st.session_state.last_detected_letter = ""
+                
+                annotated_frame = last_annotated_frame if last_annotated_frame is not None else frame
+                letter, conf = last_letter, last_conf
+
+            video_placeholder.image(annotated_frame, channels="BGR", use_container_width=True)
+            text_placeholder.markdown(f"<div style='background-color: {sidebar_color}; padding: 30px; border-radius: 10px;'><h1 style='text-align: center; font-size: 80px; color: {primary_color}; margin:0;'>{letter}</h1></div>", unsafe_allow_html=True)
+
+            MISS_TOLERANCE = 5  
+
+            if run_detection:
+                conf_percent = conf * 100
+                st.session_state.conf_history.append(conf_percent)
+
+                if conf_percent >= confidence:
                     st.session_state.miss_streak = 0
 
-            fps_placeholder.metric("Frames", str(st.session_state.frame_count))
+                    if letter == st.session_state.last_detected_letter:
+                        st.session_state.letter_counter += 1
+                    else:
+                        st.session_state.last_detected_letter = letter
+                        st.session_state.letter_counter = 1
 
-        if st.session_state.last_annotated_frame is not None:
-            video_placeholder.image(st.session_state.last_annotated_frame, channels="BGR", use_container_width=True)
+                    if st.session_state.letter_counter == stability_frames:
+                        if letter == "Delete":
+                            if len(st.session_state.sequence) > 0:
+                                st.session_state.sequence.pop()
+                            st.session_state.letter_counter = 0
+                            st.session_state.last_detected_letter = ""
+                        elif letter == "Clear":
+                            st.session_state.sequence.clear()
+                            st.session_state.letter_counter = 0
+                            st.session_state.last_detected_letter = ""
+                        elif letter == "Space":
+                            if len(st.session_state.sequence) == 0 or st.session_state.sequence[-1] != " ":
+                                st.session_state.sequence.append(" ")
+                            st.session_state.letter_counter = 0
+                            st.session_state.last_detected_letter = ""
+                        else:
+                            if len(st.session_state.sequence) == 0 or st.session_state.sequence[-1] != letter:
+                                st.session_state.sequence.append(letter)
+                else:
+                
+                    st.session_state.miss_streak += 1
+                    if st.session_state.miss_streak > MISS_TOLERANCE:
+                        st.session_state.letter_counter = 0
+                        st.session_state.last_detected_letter = ""
+                        st.session_state.miss_streak = 0
+            current_word = "".join(list(st.session_state.sequence))
+            formatted_word = current_word.title()
 
-        text_placeholder.markdown(
-            f"<div style='background-color: {sidebar_color}; padding: 30px; border-radius: 10px;'>"
-            f"<h1 style='text-align: center; font-size: 80px; color: {primary_color}; margin:0;'>{st.session_state.last_letter}</h1></div>",
-            unsafe_allow_html=True
-        )
-    else:
-        text_placeholder.markdown(
-            f"<div style='background-color: {sidebar_color}; padding: 30px; border-radius: 10px;'>"
-            f"<h1 style='text-align: center; font-size: 40px; color: {primary_color}; margin:0;'>Starting camera...</h1></div>",
-            unsafe_allow_html=True
-        )
+            if formatted_word:
+                seq_placeholder.info(f"**Word:** {formatted_word}")
+            else:
+                seq_placeholder.info("Waiting for signs...")
 
-    current_word = "".join(list(st.session_state.sequence))
-    formatted_word = current_word.title()
+            if frame_index % 6 == 0:
+                fig = go.Figure(data=go.Scatter(y=list(st.session_state.conf_history), mode='lines', line=dict(color=primary_color)))
+                fig.update_layout(height=200, margin=dict(l=0, r=0, t=0, b=0), yaxis=dict(range=[0, 100]), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                graph_placeholder.plotly_chart(fig, use_container_width=True, key=f"conf_chart_{frame_index}")
 
-    if formatted_word:
-        seq_placeholder.info(f"**Word:** {formatted_word}")
-    else:
-        seq_placeholder.info("Waiting for signs...")
+            frame_index += 1
 
-    fig = go.Figure(data=go.Scatter(y=list(st.session_state.conf_history), mode='lines', line=dict(color=primary_color)))
-    fig.update_layout(height=200, margin=dict(l=0, r=0, t=0, b=0), yaxis=dict(range=[0, 100]), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-    graph_placeholder.plotly_chart(fig, use_container_width=True, key=f"conf_chart_{st.session_state.frame_count}")
+        cap.release()
 
 
 elif page == " Upload Video":
@@ -290,11 +276,7 @@ elif page == " Upload Video":
 
     if uploaded_file is not None:
 
-        TMP_DIR = ROOT_DIR / "tmp"
-        TMP_DIR.mkdir(exist_ok=True)
-        TEMP_VIDEO_PATH = TMP_DIR / "uploaded_video.mp4"
-
-        with open(TEMP_VIDEO_PATH, "wb") as f:
+        with open("temp_video.mp4", "wb") as f:
             f.write(uploaded_file.read())
 
         st.success("Video Uploaded Successfully!")
@@ -349,7 +331,7 @@ elif page == " Upload Video":
 
            
             if start_btn or resume_clicked:
-                cap = cv2.VideoCapture(str(TEMP_VIDEO_PATH))
+                cap = cv2.VideoCapture("temp_video.mp4")
 
                 if not cap.isOpened():
                     st.error("Couldn't open the uploaded video file.")
