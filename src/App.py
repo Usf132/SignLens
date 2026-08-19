@@ -121,7 +121,7 @@ if page == " Live Translation":
 
         btn_speak, btn_space, btn_del = st.columns([2, 1, 1])
 
-        # زرار الصوت
+
         if btn_speak.button("Play", icon=":material/volume_up:", use_container_width=True, help="Play sound"):
             current_word = "".join(list(st.session_state.sequence)).title()
             if current_word:
@@ -135,11 +135,11 @@ if page == " Live Translation":
             else:
                 st.warning("No word to speak yet!")
 
-        # زرار المسافة
+
         if btn_space.button("",icon=":material/space_bar:", use_container_width=True, help="Space"):
             st.session_state.sequence.append(" ")
 
-        # زرار المسح (Backspace)
+
         if btn_del.button("⌫", use_container_width=True, help="Del"):
             if len(st.session_state.sequence) > 0:
                 st.session_state.sequence.pop()
@@ -170,7 +170,7 @@ if page == " Live Translation":
             st.error("Couldn't access the camera. Make sure it's connected and not used by another app.")
             st.session_state.run_camera = False
 
-        DETECTION_INTERVAL = 1 
+        DETECTION_INTERVAL = 2
 
         prev_time = time.time()
         frame_index = 0
@@ -194,7 +194,7 @@ if page == " Live Translation":
 
             if run_detection:
               
-                # بنفسها (YOLO + mediapipe).
+  
                 annotated_frame, letter, conf = predict_asl_sign_lm(frame, confidence)
                 last_annotated_frame, last_letter, last_conf = annotated_frame, letter, conf
             else:
@@ -290,14 +290,14 @@ elif page == " Upload Video":
             st.subheader("Recognized Sequence")
             seq_placeholder_vid = st.empty()
             
-            # عرض النص المكتشف من الفيديو
+   
             current_vid_word = "".join(st.session_state.vid_sequence).title()
             if current_vid_word:
                 seq_placeholder_vid.info(f"**Word:** {current_vid_word}")
             else:
                 seq_placeholder_vid.info("Waiting for signs...")
 
-            # --- زراير التفاعل (شيلنا زرار المسافة ورجعناهم 4 عواميد) ---
+      
             btn_speak_vid, btn_stop_vid, btn_resume_vid, btn_del_vid = st.columns([1.5, 1, 1, 1])
 
             if btn_speak_vid.button("Play", icon=":material/volume_up:", key="vid_speak", use_container_width=True, help="Play sound"):
@@ -317,31 +317,31 @@ elif page == " Upload Video":
                 
             resume_clicked = btn_resume_vid.button("", icon=":material/play_circle:", key="vid_resume", use_container_width=True, help="Continue from where it stopped")
 
-            # التفاعل: مسح آخر حرف من النص
+  
             if btn_del_vid.button("", icon=":material/backspace:", key="vid_del", use_container_width=True, help="Delete Letter"):
                 if len(st.session_state.vid_sequence) > 0:
                     st.session_state.vid_sequence.pop()
-                    st.rerun() # تحديث فوري للشاشة
-            # ----------------------------------------------
+                    st.rerun() 
+         
         with col_vid:
             vid_place = st.empty()
 
-            # زرار البداية من الأول (بقى واخد العرض كله لوحده تحت الفيديو)
+
             start_btn = st.button("Start Process", icon=":material/play_arrow:", use_container_width=True, help="Start from beginning")
 
-            # لو داس Start من تحت أو داس Resume من فوق
+           
             if start_btn or resume_clicked:
                 cap = cv2.VideoCapture("temp_video.mp4")
 
                 if not cap.isOpened():
                     st.error("Couldn't open the uploaded video file.")
                 else:
-                    # لو البداية جديدة، صفر كل حاجة
+                   
                     if start_btn:
                         st.session_state.vid_sequence.clear()
                         st.session_state.vid_frame_pos = 0
                     
-                    # لو استئناف، روح للفريم اللي وقفنا عنده
+               
                     elif resume_clicked:
                         cap.set(cv2.CAP_PROP_POS_FRAMES, st.session_state.vid_frame_pos)
 
@@ -383,7 +383,7 @@ elif page == " Upload Video":
                     cap.release()
                     st.success("Video processing complete!")
             
-            # عرض آخر فريم لو الفيديو متوقف
+       
             elif st.session_state.last_video_frame is not None:
                 vid_place.image(st.session_state.last_video_frame, channels="BGR", use_container_width=True)
 
@@ -398,17 +398,17 @@ elif page == " Text to Audio":
 
     st.write("Type any English text below and convert it to lifelike speech using the selected voice.")
 
-    # مربع كبير عشان المستخدم يكتب براحته
+   
     user_text = st.text_area("Enter your text here:", height=200, placeholder="Type something like: Hello, how are you today?")
 
-    # عملنا العواميد دي عشان نخلي الزرار في النص وشكله متناسق
+  
     col_empty1, col_btn, col_empty2 = st.columns([1, 2, 1])
 
     with col_btn:
         if st.button("Generate & Play Audio", icon=":material/volume_up:", use_container_width=True):
-            if user_text.strip(): # نتأكد إنه مكتبش مسافات فاضية بس
+            if user_text.strip():
                 with st.spinner(f"Generating audio ({selected_voice_label})..."):
-                    # بنبعت النص اللي كتبه للـ API بتاع الصوت
+              
                     audio_data = Text_to_speech(user_text.strip(), st.session_state.selected_voice_id)
                     
                     if audio_data:
