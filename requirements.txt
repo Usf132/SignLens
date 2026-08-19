@@ -5,7 +5,7 @@
 # if you need to run the training notebooks.)
 
 streamlit==1.60.0
-opencv-contrib-python==4.11.0.86
+opencv-contrib-python-headless==4.11.0.86
 numpy==1.26.4
 plotly==5.24.1
 toml==0.10.2
