@@ -1,3 +1,11 @@
+import sys
+from pathlib import Path
+
+# Make the project root importable regardless of the working directory
+ROOT_DIR = Path(__file__).resolve().parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
 import streamlit as st
 import cv2
 import numpy as np
@@ -6,7 +14,7 @@ from collections import deque
 import time
 import plotly.graph_objects as go
 import toml
-from BLM2 import predict_asl_sign_lm, Text_to_speech
+from backend import predict_asl_sign_lm, Text_to_speech
 
 st.set_page_config(initial_sidebar_state="collapsed")
 
@@ -17,7 +25,9 @@ st.set_page_config(
 )
 
 
-st.sidebar.image("data\\Logo.png", use_container_width=True)
+LOGO_PATH = ROOT_DIR / "assets" / "Logo.png"
+if LOGO_PATH.exists():
+    st.sidebar.image(str(LOGO_PATH), use_container_width=True)
 
 
 with st.sidebar:
@@ -276,7 +286,11 @@ elif page == " Upload Video":
 
     if uploaded_file is not None:
 
-        with open("temp_video.mp4", "wb") as f:
+        TMP_DIR = ROOT_DIR / "tmp"
+        TMP_DIR.mkdir(exist_ok=True)
+        TEMP_VIDEO_PATH = TMP_DIR / "uploaded_video.mp4"
+
+        with open(TEMP_VIDEO_PATH, "wb") as f:
             f.write(uploaded_file.read())
 
         st.success("Video Uploaded Successfully!")
@@ -331,7 +345,7 @@ elif page == " Upload Video":
 
            
             if start_btn or resume_clicked:
-                cap = cv2.VideoCapture("temp_video.mp4")
+                cap = cv2.VideoCapture(str(TEMP_VIDEO_PATH))
 
                 if not cap.isOpened():
                     st.error("Couldn't open the uploaded video file.")
