@@ -12,12 +12,16 @@ import numpy as np
 import os
 from collections import deque
 import time
+import queue
+import av
 import plotly.graph_objects as go
 import toml
+from streamlit_webrtc import webrtc_streamer, WebRtcMode
 from backend import predict_asl_sign_lm, Text_to_speech
 
-st.set_page_config(initial_sidebar_state="collapsed")
-
+# FIX: st.set_page_config() can only be called once per app -- the original
+# file called it twice, which raises StreamlitAPIException and crashes the
+# app on every run. Kept only the fuller call below.
 st.set_page_config(
     page_title="Sign Language Detection",
     layout="wide",
@@ -72,11 +76,16 @@ if st.sidebar.button("Save changes"):
         }
     }
 
-    os.makedirs(".streamlit", exist_ok=True)
-    with open(".streamlit/config.toml", "w") as f:
+    # FIX: was a relative ".streamlit" path, which depends on the process's
+    # working directory and can silently write to the wrong place. Anchor it
+    # to ROOT_DIR like everything else in this file already does.
+    streamlit_dir = ROOT_DIR / ".streamlit"
+    streamlit_dir.mkdir(exist_ok=True)
+    with open(streamlit_dir / "config.toml", "w") as f:
         toml.dump(config, f)
 
-    st.sidebar.success("Done! Relode the page please!")
+    # FIX: typo "Relode" -> "Reload"
+    st.sidebar.success("Done! Reload the page please!")
 
 
 st.sidebar.divider()
@@ -109,6 +118,10 @@ if 'last_video_frame' not in st.session_state:
     st.session_state.last_video_frame = None
 if 'vid_frame_pos' not in st.session_state:
     st.session_state.vid_frame_pos = 0
+if 'result_queue' not in st.session_state:
+    st.session_state.result_queue = queue.Queue(maxsize=1)
+if 'vid_paused' not in st.session_state:
+    st.session_state.vid_paused = False
 
 
 if page == " Live Translation":
@@ -159,7 +172,8 @@ if page == " Live Translation":
         graph_placeholder = st.empty()
 
     with col_video:
-        video_placeholder = st.empty()
+        # NOTE: no more manual video_placeholder.image() -- webrtc_streamer
+        # renders the live (annotated) video itself, directly in the browser.
 
         # ctrl
         ctrl1, ctrl2, ctrl3 = st.columns(3)
@@ -174,87 +188,100 @@ if page == " Live Translation":
             st.session_state.letter_counter = 0
 
     if st.session_state.run_camera:
-        cap = cv2.VideoCapture(0)
-
-        if not cap.isOpened():
-            st.error("Couldn't access the camera. Make sure it's connected and not used by another app.")
-            st.session_state.run_camera = False
+        # FIX: cv2.VideoCapture(0) opens a camera attached to the SERVER,
+        # which doesn't exist on Streamlit Community Cloud (or any hosted
+        # environment) -- that's the "can't open camera by index" error.
+        # streamlit-webrtc instead streams frames from the VISITOR'S
+        # browser webcam over WebRTC to this backend for processing.
 
         DETECTION_INTERVAL = 2
+        # Mutable cell so the callback closure (runs in a background thread
+        # managed by streamlit-webrtc) can keep a running frame count.
+        frame_counter = {"n": 0}
 
-        prev_time = time.time()
-        frame_index = 0
-        last_annotated_frame = None
-        last_letter = ""
-        last_conf = 0.0
+        def video_frame_callback(frame):
+            img = frame.to_ndarray(format="bgr24")
+            frame_counter["n"] += 1
 
-        while st.session_state.run_camera and cap.isOpened():
-            ret, frame = cap.read()
-            if not ret:
-                break
-
-            current_time = time.time()
-            elapsed = current_time - prev_time
-            fps = 1 / elapsed if elapsed > 0 else 0.0
-            prev_time = current_time
-
-            fps_placeholder.metric("FPS", f"{fps:.1f}")
-
-            run_detection = (frame_index % DETECTION_INTERVAL == 0)
-
-            if run_detection:
-              
-  
-                annotated_frame, letter, conf = predict_asl_sign_lm(frame, confidence)
-                last_annotated_frame, last_letter, last_conf = annotated_frame, letter, conf
+            if frame_counter["n"] % DETECTION_INTERVAL == 0:
+                annotated_frame, letter, conf = predict_asl_sign_lm(img, confidence)
+                # IMPORTANT: this callback runs in a background thread, so it
+                # must NOT touch st.session_state or any Streamlit widget
+                # directly -- only hand results off through a thread-safe
+                # queue. The polling loop below (running in Streamlit's
+                # normal script thread) does all session_state / UI updates.
+                try:
+                    st.session_state.result_queue.put_nowait({"letter": letter, "confidence": conf})
+                except queue.Full:
+                    pass
             else:
-                
-                annotated_frame = last_annotated_frame if last_annotated_frame is not None else frame
-                letter, conf = last_letter, last_conf
+                annotated_frame = img
 
-            video_placeholder.image(annotated_frame, channels="BGR", use_container_width=True)
-            text_placeholder.markdown(f"<div style='background-color: {sidebar_color}; padding: 30px; border-radius: 10px;'><h1 style='text-align: center; font-size: 80px; color: {primary_color}; margin:0;'>{letter}</h1></div>", unsafe_allow_html=True)
+            return av.VideoFrame.from_ndarray(annotated_frame, format="bgr24")
 
-            MISS_TOLERANCE = 5  
+        webrtc_ctx = webrtc_streamer(
+            key="sign-language-live",
+            mode=WebRtcMode.SENDRECV,
+            video_frame_callback=video_frame_callback,
+            media_stream_constraints={"video": True, "audio": False},
+            async_processing=True,
+        )
 
-            if run_detection:
-                conf_percent = conf * 100
-                st.session_state.conf_history.append(conf_percent)
+        MISS_TOLERANCE = 5
+        poll_count = 0
 
-                if conf_percent >= confidence:
-                    st.session_state.miss_streak = 0
+        while webrtc_ctx.state.playing and st.session_state.run_camera:
+            try:
+                result = st.session_state.result_queue.get(timeout=1.0)
+            except queue.Empty:
+                continue
 
-                    if letter == st.session_state.last_detected_letter:
-                        st.session_state.letter_counter += 1
-                    else:
-                        st.session_state.last_detected_letter = letter
-                        st.session_state.letter_counter = 1
+            letter, conf = result["letter"], result["confidence"]
+            poll_count += 1
 
-                    if st.session_state.letter_counter == stability_frames:
-                        if letter == "Delete":
-                            if len(st.session_state.sequence) > 0:
-                                st.session_state.sequence.pop()
-                            st.session_state.letter_counter = 0
-                            st.session_state.last_detected_letter = ""
-                        elif letter == "Clear":
-                            st.session_state.sequence.clear()
-                            st.session_state.letter_counter = 0
-                            st.session_state.last_detected_letter = ""
-                        elif letter == "Space":
-                            if len(st.session_state.sequence) == 0 or st.session_state.sequence[-1] != " ":
-                                st.session_state.sequence.append(" ")
-                            st.session_state.letter_counter = 0
-                            st.session_state.last_detected_letter = ""
-                        else:
-                            if len(st.session_state.sequence) == 0 or st.session_state.sequence[-1] != letter:
-                                st.session_state.sequence.append(letter)
+            text_placeholder.markdown(
+                f"<div style='background-color: {sidebar_color}; padding: 30px; border-radius: 10px;'>"
+                f"<h1 style='text-align: center; font-size: 80px; color: {primary_color}; margin:0;'>{letter}</h1></div>",
+                unsafe_allow_html=True,
+            )
+
+            conf_percent = conf * 100
+            st.session_state.conf_history.append(conf_percent)
+
+            if conf_percent >= confidence:
+                st.session_state.miss_streak = 0
+
+                if letter == st.session_state.last_detected_letter:
+                    st.session_state.letter_counter += 1
                 else:
-                
-                    st.session_state.miss_streak += 1
-                    if st.session_state.miss_streak > MISS_TOLERANCE:
+                    st.session_state.last_detected_letter = letter
+                    st.session_state.letter_counter = 1
+
+                if st.session_state.letter_counter == stability_frames:
+                    if letter == "Delete":
+                        if len(st.session_state.sequence) > 0:
+                            st.session_state.sequence.pop()
                         st.session_state.letter_counter = 0
                         st.session_state.last_detected_letter = ""
-                        st.session_state.miss_streak = 0
+                    elif letter == "Clear":
+                        st.session_state.sequence.clear()
+                        st.session_state.letter_counter = 0
+                        st.session_state.last_detected_letter = ""
+                    elif letter == "Space":
+                        if len(st.session_state.sequence) == 0 or st.session_state.sequence[-1] != " ":
+                            st.session_state.sequence.append(" ")
+                        st.session_state.letter_counter = 0
+                        st.session_state.last_detected_letter = ""
+                    else:
+                        if len(st.session_state.sequence) == 0 or st.session_state.sequence[-1] != letter:
+                            st.session_state.sequence.append(letter)
+            else:
+                st.session_state.miss_streak += 1
+                if st.session_state.miss_streak > MISS_TOLERANCE:
+                    st.session_state.letter_counter = 0
+                    st.session_state.last_detected_letter = ""
+                    st.session_state.miss_streak = 0
+
             current_word = "".join(list(st.session_state.sequence))
             formatted_word = current_word.title()
 
@@ -263,14 +290,10 @@ if page == " Live Translation":
             else:
                 seq_placeholder.info("Waiting for signs...")
 
-            if frame_index % 6 == 0:
+            if poll_count % 6 == 0:
                 fig = go.Figure(data=go.Scatter(y=list(st.session_state.conf_history), mode='lines', line=dict(color=primary_color)))
                 fig.update_layout(height=200, margin=dict(l=0, r=0, t=0, b=0), yaxis=dict(range=[0, 100]), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                graph_placeholder.plotly_chart(fig, use_container_width=True, key=f"conf_chart_{frame_index}")
-
-            frame_index += 1
-
-        cap.release()
+                graph_placeholder.plotly_chart(fig, use_container_width=True, key=f"conf_chart_{poll_count}")
 
 
 elif page == " Upload Video":
@@ -326,10 +349,18 @@ elif page == " Upload Video":
                 else:
                     st.warning("No word to speak yet!")
 
+            # FIX: this button used to only show a message -- it never
+            # actually stopped the frame loop below, because nothing inside
+            # that loop checked any pause flag. Now it sets vid_paused and
+            # reruns, and the while-loop checks it every iteration.
             if btn_stop_vid.button("", icon=":material/pause:", key="vid_stop", use_container_width=True, help="Pause Video"):
+                st.session_state.vid_paused = True
                 st.info("Video paused.")
-                
+                st.rerun()
+
             resume_clicked = btn_resume_vid.button("", icon=":material/play_circle:", key="vid_resume", use_container_width=True, help="Continue from where it stopped")
+            if resume_clicked:
+                st.session_state.vid_paused = False
 
   
             if btn_del_vid.button("", icon=":material/backspace:", key="vid_del", use_container_width=True, help="Delete Letter"):
@@ -346,6 +377,9 @@ elif page == " Upload Video":
            
             if start_btn or resume_clicked:
                 cap = cv2.VideoCapture(str(TEMP_VIDEO_PATH))
+                # NOTE: unlike Live Translation, this VideoCapture reads an
+                # uploaded FILE from disk, not a live camera device -- that
+                # works fine on a server, no webrtc needed here.
 
                 if not cap.isOpened():
                     st.error("Couldn't open the uploaded video file.")
@@ -354,6 +388,7 @@ elif page == " Upload Video":
                     if start_btn:
                         st.session_state.vid_sequence.clear()
                         st.session_state.vid_frame_pos = 0
+                        st.session_state.vid_paused = False
                     
                
                     elif resume_clicked:
@@ -363,6 +398,12 @@ elif page == " Upload Video":
                     frame_skip = 2
 
                     while cap.isOpened():
+                        # FIX: this is what actually makes the Pause button work --
+                        # break out of the loop (and stop reading/processing more
+                        # frames) as soon as vid_paused is set.
+                        if st.session_state.vid_paused:
+                            break
+
                         ret, frame = cap.read()
                         if not ret:
                             break
@@ -379,15 +420,25 @@ elif page == " Upload Video":
 
                         txt_place.markdown(f"<div style='background-color: {sidebar_color}; padding: 30px; border-radius: 10px;'><h1 style='text-align: center; font-size: 80px; color: {primary_color}; margin:0;'>{letter}</h1></div>", unsafe_allow_html=True)
 
-                        if letter == "delete":
+                        # FIX: labels from the model are capitalized
+                        # ("Delete"/"Clear"/"Space" -- see models/class_mapping.json),
+                        # but this branch compared against lowercase strings, so
+                        # these commands never fired here (they only worked in
+                        # Live Translation, which already used the right casing).
+                        if letter == "Delete":
                             if len(st.session_state.vid_sequence) > 0:
                                 st.session_state.vid_sequence.pop()
-                        elif letter == "clear":
+                        elif letter == "Clear":
                             st.session_state.vid_sequence.clear()
-                        elif letter == "space":
+                        elif letter == "Space":
                             if len(st.session_state.vid_sequence) == 0 or st.session_state.vid_sequence[-1] != " ":
                                 st.session_state.vid_sequence.append(" ")
-                        elif letter and letter not in st.session_state.vid_sequence:
+                        # FIX: "letter not in st.session_state.vid_sequence" checked
+                        # the ENTIRE sequence history, so a repeated letter (e.g. the
+                        # second "L" in "HELLO") could never be added again once it
+                        # had appeared anywhere. Now it only checks the last letter,
+                        # matching the (already-correct) Live Translation logic.
+                        elif letter and (len(st.session_state.vid_sequence) == 0 or st.session_state.vid_sequence[-1] != letter):
                             st.session_state.vid_sequence.append(letter)
 
                         seq_placeholder_vid.info(f"**Word:** {''.join(st.session_state.vid_sequence).title()}")
@@ -395,7 +446,8 @@ elif page == " Upload Video":
                         st.session_state.last_video_frame = annotated_frame
 
                     cap.release()
-                    st.success("Video processing complete!")
+                    if not st.session_state.vid_paused:
+                        st.success("Video processing complete!")
             
        
             elif st.session_state.last_video_frame is not None:
