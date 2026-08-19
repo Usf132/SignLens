@@ -14,9 +14,7 @@ from collections import deque
 import time
 import plotly.graph_objects as go
 import toml
-import threading
-import av
-from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
+import hashlib
 from backend import predict_asl_sign_lm, Text_to_speech
 
 st.set_page_config(initial_sidebar_state="collapsed")
@@ -50,11 +48,11 @@ with st.sidebar:
         st.metric("Confidence", "95.02%", "Threshold: 70%")
     with col2:
         fps_placeholder = st.empty()
-        fps_placeholder.metric("FPS", "0.0")
+        fps_placeholder.metric("Captures", "0")
 
     # Confidence Threshold
     confidence = st.slider("Confidence Threshold", 0, 100, 55)
-    stability_frames = st.slider("Stability Frames (Buffer)", 1, 30, 10, help="fps")
+    stability_frames = st.slider("Stability Frames (Buffer)", 1, 30, 10, help="Not used in snapshot mode")
 
 st.sidebar.divider()
 
@@ -79,7 +77,7 @@ if st.sidebar.button("Save changes"):
     with open(".streamlit/config.toml", "w") as f:
         toml.dump(config, f)
 
-    st.sidebar.success("Done! Relode the page please!")
+    st.sidebar.success("Done! Reload the page please!")
 
 
 st.sidebar.divider()
@@ -98,8 +96,6 @@ if 'sequence' not in st.session_state:
     st.session_state.sequence = deque()
 if 'conf_history' not in st.session_state:
     st.session_state.conf_history = deque(maxlen=50)
-if 'run_camera' not in st.session_state:
-    st.session_state.run_camera = False
 if 'last_detected_letter' not in st.session_state:
     st.session_state.last_detected_letter = ""
 if 'letter_counter' not in st.session_state:
@@ -112,56 +108,16 @@ if 'last_video_frame' not in st.session_state:
     st.session_state.last_video_frame = None
 if 'vid_frame_pos' not in st.session_state:
     st.session_state.vid_frame_pos = 0
-
-
-RTC_CONFIGURATION = RTCConfiguration(
-    {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
-)
-
-
-class SignProcessor(VideoProcessorBase):
-    """Runs on a background thread fed by the browser's webcam via WebRTC."""
-
-    def __init__(self):
-        self.lock = threading.Lock()
-        self.letter = ""
-        self.conf = 0.0
-        self.fps = 0.0
-        self.prev_time = time.time()
-        self.frame_index = 0
-        self.last_annotated_frame = None
-        self.last_letter = ""
-        self.last_conf = 0.0
-        self.confidence_threshold = 55  # updated live from the main thread
-
-    def recv(self, frame):
-        img = frame.to_ndarray(format="bgr24")
-
-        current_time = time.time()
-        elapsed = current_time - self.prev_time
-        fps = 1 / elapsed if elapsed > 0 else 0.0
-        self.prev_time = current_time
-
-        DETECTION_INTERVAL = 2
-        run_detection = (self.frame_index % DETECTION_INTERVAL == 0)
-        self.frame_index += 1
-
-        with self.lock:
-            threshold = self.confidence_threshold
-
-        if run_detection:
-            annotated_frame, letter, conf = predict_asl_sign_lm(img, threshold)
-            self.last_annotated_frame, self.last_letter, self.last_conf = annotated_frame, letter, conf
-        else:
-            annotated_frame = self.last_annotated_frame if self.last_annotated_frame is not None else img
-            letter, conf = self.last_letter, self.last_conf
-
-        with self.lock:
-            self.fps = fps
-            self.letter = letter
-            self.conf = conf
-
-        return av.VideoFrame.from_ndarray(annotated_frame, format="bgr24")
+if 'capture_count' not in st.session_state:
+    st.session_state.capture_count = 0
+if 'last_capture_hash' not in st.session_state:
+    st.session_state.last_capture_hash = None
+if 'last_annotated_frame' not in st.session_state:
+    st.session_state.last_annotated_frame = None
+if 'last_letter' not in st.session_state:
+    st.session_state.last_letter = ""
+if 'last_conf' not in st.session_state:
+    st.session_state.last_conf = 0.0
 
 
 if page == " Live Translation":
@@ -172,6 +128,7 @@ if page == " Live Translation":
     """
     st.markdown(box_html, unsafe_allow_html=True)
     st.header("Live Camera Feed & Translation")
+    st.caption("Point your hand at the camera and click the capture button to translate each sign.")
 
     col_video, col_text = st.columns([2, 1])
 
@@ -212,92 +169,85 @@ if page == " Live Translation":
         graph_placeholder = st.empty()
 
     with col_video:
+        camera_image = st.camera_input("Capture a sign", label_visibility="collapsed")
+
         video_placeholder = st.empty()
 
-        ctx = webrtc_streamer(
-            key="sign-language",
-            video_processor_factory=SignProcessor,
-            rtc_configuration=RTC_CONFIGURATION,
-            media_stream_constraints={"video": True, "audio": False},
-        )
-
-        ctrl3 = st.columns(1)[0]
-        if ctrl3.button("Clear", use_container_width=True):
+        ctrl_clear = st.columns(1)[0]
+        if ctrl_clear.button("Clear", use_container_width=True):
             st.session_state.sequence.clear()
             st.session_state.conf_history.clear()
             st.session_state.last_detected_letter = ""
             st.session_state.letter_counter = 0
+            st.session_state.capture_count = 0
+            st.session_state.last_capture_hash = None
 
-    if ctx.video_processor:
-        # push the live threshold slider value into the background thread
-        with ctx.video_processor.lock:
-            ctx.video_processor.confidence_threshold = confidence
-            letter = ctx.video_processor.letter
-            conf = ctx.video_processor.conf
-            fps = ctx.video_processor.fps
+    if camera_image is not None:
+        image_bytes = camera_image.getvalue()
+        image_hash = hashlib.md5(image_bytes).hexdigest()
 
-        fps_placeholder.metric("FPS", f"{fps:.1f}")
-        text_placeholder.markdown(
-            f"<div style='background-color: {sidebar_color}; padding: 30px; border-radius: 10px;'>"
-            f"<h1 style='text-align: center; font-size: 80px; color: {primary_color}; margin:0;'>{letter}</h1></div>",
-            unsafe_allow_html=True
-        )
+        # Only run detection when a genuinely new photo was captured
+        if image_hash != st.session_state.last_capture_hash:
+            st.session_state.last_capture_hash = image_hash
+            st.session_state.capture_count += 1
 
-        MISS_TOLERANCE = 5
-        conf_percent = conf * 100
-        st.session_state.conf_history.append(conf_percent)
+            file_bytes = np.frombuffer(image_bytes, np.uint8)
+            frame = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
 
-        if conf_percent >= confidence:
-            st.session_state.miss_streak = 0
+            annotated_frame, letter, conf = predict_asl_sign_lm(frame, confidence)
 
-            if letter == st.session_state.last_detected_letter:
-                st.session_state.letter_counter += 1
-            else:
-                st.session_state.last_detected_letter = letter
-                st.session_state.letter_counter = 1
+            st.session_state.last_annotated_frame = annotated_frame
+            st.session_state.last_letter = letter
+            st.session_state.last_conf = conf
 
-            if st.session_state.letter_counter == stability_frames:
+            conf_percent = conf * 100
+            st.session_state.conf_history.append(conf_percent)
+
+            if conf_percent >= confidence:
+                st.session_state.miss_streak = 0
+
                 if letter == "Delete":
                     if len(st.session_state.sequence) > 0:
                         st.session_state.sequence.pop()
-                    st.session_state.letter_counter = 0
-                    st.session_state.last_detected_letter = ""
                 elif letter == "Clear":
                     st.session_state.sequence.clear()
-                    st.session_state.letter_counter = 0
-                    st.session_state.last_detected_letter = ""
                 elif letter == "Space":
                     if len(st.session_state.sequence) == 0 or st.session_state.sequence[-1] != " ":
                         st.session_state.sequence.append(" ")
-                    st.session_state.letter_counter = 0
-                    st.session_state.last_detected_letter = ""
                 else:
                     if len(st.session_state.sequence) == 0 or st.session_state.sequence[-1] != letter:
                         st.session_state.sequence.append(letter)
-        else:
-            st.session_state.miss_streak += 1
-            if st.session_state.miss_streak > MISS_TOLERANCE:
-                st.session_state.letter_counter = 0
-                st.session_state.last_detected_letter = ""
-                st.session_state.miss_streak = 0
+            else:
+                st.session_state.miss_streak += 1
 
-        current_word = "".join(list(st.session_state.sequence))
-        formatted_word = current_word.title()
+        fps_placeholder.metric("Captures", str(st.session_state.capture_count))
 
-        if formatted_word:
-            seq_placeholder.info(f"**Word:** {formatted_word}")
-        else:
-            seq_placeholder.info("Waiting for signs...")
+        if st.session_state.last_annotated_frame is not None:
+            video_placeholder.image(st.session_state.last_annotated_frame, channels="BGR", use_container_width=True)
 
-        fig = go.Figure(data=go.Scatter(y=list(st.session_state.conf_history), mode='lines', line=dict(color=primary_color)))
-        fig.update_layout(height=200, margin=dict(l=0, r=0, t=0, b=0), yaxis=dict(range=[0, 100]), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-        graph_placeholder.plotly_chart(fig, use_container_width=True, key=f"conf_chart_{time.time()}")
-
-        # Force periodic reruns so the stats above keep refreshing while the stream is live
-        time.sleep(0.3)
-        st.rerun()
+        text_placeholder.markdown(
+            f"<div style='background-color: {sidebar_color}; padding: 30px; border-radius: 10px;'>"
+            f"<h1 style='text-align: center; font-size: 80px; color: {primary_color}; margin:0;'>{st.session_state.last_letter}</h1></div>",
+            unsafe_allow_html=True
+        )
     else:
-        seq_placeholder.info("Click Start above to begin.")
+        text_placeholder.markdown(
+            f"<div style='background-color: {sidebar_color}; padding: 30px; border-radius: 10px;'>"
+            f"<h1 style='text-align: center; font-size: 40px; color: {primary_color}; margin:0;'>Ready</h1></div>",
+            unsafe_allow_html=True
+        )
+
+    current_word = "".join(list(st.session_state.sequence))
+    formatted_word = current_word.title()
+
+    if formatted_word:
+        seq_placeholder.info(f"**Word:** {formatted_word}")
+    else:
+        seq_placeholder.info("Waiting for signs...")
+
+    fig = go.Figure(data=go.Scatter(y=list(st.session_state.conf_history), mode='lines', line=dict(color=primary_color)))
+    fig.update_layout(height=200, margin=dict(l=0, r=0, t=0, b=0), yaxis=dict(range=[0, 100]), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+    graph_placeholder.plotly_chart(fig, use_container_width=True, key=f"conf_chart_{st.session_state.capture_count}")
 
 
 elif page == " Upload Video":
