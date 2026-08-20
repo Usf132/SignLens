@@ -6,7 +6,7 @@ from collections import deque
 import time
 import plotly.graph_objects as go
 import toml
-from BLM2 import predict_asl_sign_lm, Text_to_speech
+from backend import predict_asl_sign_lm, Text_to_speech
 
 st.set_page_config(initial_sidebar_state="collapsed")
 
@@ -17,7 +17,7 @@ st.set_page_config(
 )
 
 
-st.sidebar.image("data\\Logo.png", use_container_width=True)
+st.sidebar.image("assets\\Logo.png", use_container_width=True)
 
 
 with st.sidebar:
