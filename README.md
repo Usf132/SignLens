@@ -77,7 +77,7 @@ flowchart TD
 ## 📁 Project Structure
 
 ```
-Signify/
+.
 │
 ├── app/
 │   ├── main.py                 # Streamlit application entry point
