@@ -1,6 +1,10 @@
-# SignLens
+<p align="center">
+  <img src="assets/logo.jpeg" alt="Signfy logo" width="260">
+</p>
 
-SignLens is a computer-vision pipeline that recognizes American Sign Language (ASL) hand signs in real time and converts them into text and speech. It combines a YOLO hand detector, MediaPipe landmark extraction, and a TensorFlow classifier, wrapped in a Streamlit app with live camera translation, video upload, and text-to-speech.
+# Signfy
+
+Signfy is a computer-vision pipeline that recognizes American Sign Language (ASL) hand signs in real time and converts them into text and speech. It combines a YOLO hand detector, MediaPipe landmark extraction, and a TensorFlow classifier, wrapped in a Streamlit app with live camera translation, video upload, and text-to-speech.
 
 > **This is the `offline` branch** — a self-contained local setup meant to be cloned and run entirely on your own machine (localhost), with no deployment/hosting steps required.
 
@@ -35,7 +39,7 @@ Camera / Video Frame
 ## Project structure
 
 ```
-SignLens/
+Signfy/
 ├── app/                  # Streamlit application
 │   ├── main.py           # UI: live translation, video upload, text-to-audio
 │   └── backend.py        # Glue between the UI and the inference pipeline, TTS
@@ -76,13 +80,13 @@ SignLens/
 
 ## Getting started (Local Setup)
 
-These steps get SignLens running on `localhost` from a clean machine — no cloud/hosting account needed.
+These steps get Signfy running on `localhost` from a clean machine — no cloud/hosting account needed.
 
 ### 1. Clone the `offline` branch
 
 ```bash
-git clone -b offline https://github.com/Usf132/SignLens.git
-cd SignLens
+git clone -b offline https://github.com/Usf132/Signfy.git
+cd Signfy
 ```
 
 ### 2. Create and activate a virtual environment
