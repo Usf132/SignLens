@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="assets\logo.png" alt="Signfy logo" width="260">
+  <img src="assets/L1.png" alt="Signfy logo" width="260">
 </p>
 
-# Signfy
+# Signify
 
 Signfy is a computer-vision pipeline that recognizes American Sign Language (ASL) hand signs in real time and converts them into text and speech. It combines a YOLO hand detector, MediaPipe landmark extraction, and a TensorFlow classifier, wrapped in a Streamlit app with live camera translation, video upload, and text-to-speech.
 
@@ -85,8 +85,8 @@ These steps get Signfy running on `localhost` from a clean machine — no cloud/
 ### 1. Clone the `offline` branch
 
 ```bash
-git clone -b offline https://github.com/Usf132/Signfy.git
-cd Signfy
+git clone -b offline https://github.com/Usf132/Signify.git
+cd Signify
 ```
 
 ### 2. Create and activate a virtual environment
