@@ -23,12 +23,6 @@ Signify is a real-time sign language recognition app that turns hand gestures in
 
 ---
 
-## 🎥 Demo / Screenshots
-
-> Add your demo GIF, application screenshots, or a short demo video here.
-
----
-
 ## 🧭 The Journey
 
 **We started with YOLO.** Our first attempt treated sign recognition as direct object detection: point YOLO at a hand and have it output the letter.
