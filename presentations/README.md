@@ -6,8 +6,7 @@ This directory contains the presentation slides and visual assets for the projec
 
 | File Name | Format | Description |
 | :--- | :--- | :--- |
-| `project-presentation.pdf` | PDF | Primary presentation deck (recommended for quick inline viewing). |
-| `project-presentation.pptx` | PPTX | Original editable PowerPoint slides with speaker animations. |
+| `final presentation.pptx` | PPTX | Original editable PowerPoint slides. |
 
 ## 🎯 Key Highlights Covered in the Deck
 
