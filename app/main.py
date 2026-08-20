@@ -205,7 +205,7 @@ if page == " Live Translation":
             video_placeholder.image(annotated_frame, channels="BGR", use_container_width=True)
             text_placeholder.markdown(f"<div style='background-color: {sidebar_color}; padding: 30px; border-radius: 10px;'><h1 style='text-align: center; font-size: 80px; color: {primary_color}; margin:0;'>{letter}</h1></div>", unsafe_allow_html=True)
 
-            MISS_TOLERANCE = 5  
+            MISS_TOLERANCE = 3  
 
             if run_detection:
                 conf_percent = conf * 100
@@ -231,17 +231,16 @@ if page == " Live Translation":
                             st.session_state.letter_counter = 0
                             st.session_state.last_detected_letter = ""
                         elif letter == "Space":
-                            if len(st.session_state.sequence) == 0 or st.session_state.sequence[-1] != " ":
-                                st.session_state.sequence.append(" ")
+                            st.session_state.sequence.append(" ")
                             st.session_state.letter_counter = 0
                             st.session_state.last_detected_letter = ""
                         else:
-                            if len(st.session_state.sequence) == 0 or st.session_state.sequence[-1] != letter:
-                                st.session_state.sequence.append(letter)
+                            # السر هنا: ضيفنا الحرف فوراً بدون أي شروط تمنع التكرار
+                            st.session_state.sequence.append(letter)
                 else:
-                
                     st.session_state.miss_streak += 1
-                    if st.session_state.miss_streak > MISS_TOLERANCE:
+                    # قللنا الرقم ده لـ 3 عشان أول ما تنزل إيدك يصفر العداد في جزء من الثانية
+                    if st.session_state.miss_streak > 3:  
                         st.session_state.letter_counter = 0
                         st.session_state.last_detected_letter = ""
                         st.session_state.miss_streak = 0
