@@ -1,4 +1,6 @@
-[![Signify](assets/Logo.png)](assets/Logo.png)
+<p align="center">
+  <img src="assets/Logo.png" alt="Signify" width="300">
+</p>
 
 # 🤟 Signfy
 
@@ -117,7 +119,14 @@ flowchart TD
 ├── LICENSE
 └── README.md
 ```
+---
+## 🔤 Supported Signs
 
+SignLens recognizes all **26 letters of the ASL alphabet (A–Z)**, along with **3 control gestures** used to build and edit the generated sentence.
+
+[![ASL Alphabet](assets/Gestures.png)](assets/Gestures.png)
+
+---
 ## 🛠️ Tech Stack
 
 YOLO (Ultralytics) · MediaPipe Hands · PyTorch (original classifier) · TensorFlow/Keras (current classifier) · Streamlit · ElevenLabs · Python
