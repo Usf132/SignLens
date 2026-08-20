@@ -1,4 +1,4 @@
-[![SignLens](assets/logo.png)](assets/logo.png)
+[![SignLens](assets/logo.png)](assets/Logo.png)
 
 # 🤟 SignLens
 
