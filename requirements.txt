@@ -1,5 +1,5 @@
 # Core runtime dependencies for the SignLens Streamlit app.
-# (Trimmed from a full `pip freeze` — the previous requirements.txt mixed
+# (Trimmed from a full `pip freeze` -- the previous requirements.txt mixed
 # these with ~130 unrelated notebook/dev packages such as ipykernel, jedi,
 # and debugpy. Re-add those separately, e.g. in a requirements-dev.txt,
 # if you need to run the training notebooks.)
@@ -16,3 +16,5 @@ tensorflow==2.17.1
 ultralytics==8.3.0
 tornado==6.4.1
 streamlit-camera-input-live==0.2.0
+streamlit-webrtc==0.47.9
+av==12.3.0
