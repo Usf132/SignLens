@@ -219,12 +219,55 @@ if page == " Live Translation":
 
             return av.VideoFrame.from_ndarray(annotated_frame, format="bgr24")
 
+        # FIX: Streamlit Community Cloud blocks the outbound UDP that plain
+        # STUN needs to negotiate a connection -- that's what was producing
+        # the repeating "aioice ... AttributeError: 'NoneType' object has no
+        # attribute 'sendto'" errors in the logs (ICE candidate gathering
+        # timing out, then a stale retry firing after teardown). A TURN
+        # server relays media over TCP/TLS instead, which isn't blocked.
+        # get_ice_servers() below tries Twilio's free dynamic TURN
+        # credentials first (needs a Twilio account, see note below), and
+        # falls back to Open Relay Project's free public TURN server if
+        # Twilio isn't configured -- good enough to get you working today,
+        # but swap in your own TURN provider for anything beyond testing,
+        # since free public TURN servers have no uptime guarantee.
+        def get_ice_servers():
+            try:
+                from twilio.rest import Client
+                account_sid = st.secrets["TWILIO_ACCOUNT_SID"]
+                auth_token = st.secrets["TWILIO_AUTH_TOKEN"]
+                client = Client(account_sid, auth_token)
+                token = client.tokens.create()
+                return token.ice_servers
+            except (KeyError, FileNotFoundError, Exception):
+                # No Twilio secrets configured (or the call failed) -- fall
+                # back to Open Relay Project's free public TURN server.
+                return [
+                    {"urls": "stun:stun.relay.metered.ca:80"},
+                    {
+                        "urls": "turn:global.relay.metered.ca:80",
+                        "username": "openrelayproject",
+                        "credential": "openrelayproject",
+                    },
+                    {
+                        "urls": "turn:global.relay.metered.ca:443",
+                        "username": "openrelayproject",
+                        "credential": "openrelayproject",
+                    },
+                    {
+                        "urls": "turn:global.relay.metered.ca:443?transport=tcp",
+                        "username": "openrelayproject",
+                        "credential": "openrelayproject",
+                    },
+                ]
+
         webrtc_ctx = webrtc_streamer(
             key="sign-language-live",
             mode=WebRtcMode.SENDRECV,
             video_frame_callback=video_frame_callback,
             media_stream_constraints={"video": True, "audio": False},
             async_processing=True,
+            rtc_configuration={"iceServers": get_ice_servers()},
         )
 
         MISS_TOLERANCE = 5
