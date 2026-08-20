@@ -408,7 +408,6 @@ elif page == "Translate an Image":
             img_place = st.empty()
             img_place.image(image, caption='Uploaded Image', use_container_width=True)
             
-            # زرار الترجمة
             translate_btn = st.button("Translate Image", icon=":material/image_search:", use_container_width=True)
 
         with col_txt:
