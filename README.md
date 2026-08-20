@@ -160,10 +160,6 @@ Exact accuracy/precision/recall/F1 numbers for the current Keras model aren't in
 
 Dataset source: *add link once available.* Built on [Ultralytics YOLO](https://github.com/ultralytics/ultralytics), [MediaPipe Hands](https://developers.google.com/mediapipe), [TensorFlow/Keras](https://www.tensorflow.org/), and [ElevenLabs](https://elevenlabs.io/).
 
-## 📄 License
-
-Licensed under the [MIT License](LICENSE).
-
 ---
 
 ## 👥 Contributors
@@ -174,3 +170,9 @@ Licensed under the [MIT License](LICENSE).
 | Mohamed Mokhtar | [@Mo5tar2005](https://github.com/Mo5tar2005) | [mohamed-mokhtar](https://www.linkedin.com/in/mohamed-mokhtar-881347401) |
 | Youssef Saad | [@Usf132](https://github.com/Usf132) | [youssef-saad-dev](https://www.linkedin.com/in/youssef-saad-dev) |
 | Yusuf Mustafa | [@Draken4-4](https://github.com/Draken4-4) | [yusuf-mustafa](https://www.linkedin.com/in/yusuf-mustafa-aa7188352) |
+
+---
+
+## 📄 License
+
+Licensed under the [MIT License](LICENSE).
