@@ -141,13 +141,9 @@ Signify recognizes all **26 letters of the ASL alphabet (A–Z)**, along with **
 │   ├── main.py                         # Streamlit application entry point
 │   └── backend.py                      # App backend + ElevenLabs TTS integration
 │
-├── signlens/
-│   ├── yolo_detector.py                # YOLO hand detection
-│   ├── landmark.py                     # MediaPipe landmark extraction/normalization
-│   ├── recognizer.py                   # TensorFlow/Keras classifier
-│   ├── stabilizer.py                   # Prediction stabilization
-│   ├── sentence.py                     # Sentence construction
-│   └── pipeline.py                     # Full pipeline orchestration
+├── assets/
+│   ├── Logo.png
+│   └── Gestures.png
 │
 ├── models/
 │   ├── landmark_model.keras            # Current classifier
@@ -167,9 +163,17 @@ Signify recognizes all **26 letters of the ASL alphabet (A–Z)**, along with **
 │   ├── landmarks_dataset.npz
 │   └── training_curves.png
 │
-├── assets/
-│   ├── Logo.png
-│   └── Gestures.png
+├── presentations/
+│   └── README.md
+│
+├── signlens/
+│   ├── yolo_detector.py                # YOLO hand detection
+│   ├── landmark.py                     # MediaPipe landmark extraction/normalization
+│   ├── recognizer.py                   # TensorFlow/Keras classifier
+│   ├── stabilizer.py                   # Prediction stabilization
+│   ├── sentence.py                     # Sentence construction
+│   └── pipeline.py                     # Full pipeline orchestration
+
 │
 ├── .env.example
 ├── requirements.txt
