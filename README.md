@@ -1,6 +1,6 @@
 [![Signify](assets/Logo.png)](assets/Logo.png)
 
-# 🤟 Signify
+# 🤟 Signfy
 
 **Sign Language → Text → Speech.**
 
