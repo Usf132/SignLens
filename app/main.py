@@ -205,7 +205,7 @@ if page == " Live Translation":
             video_placeholder.image(annotated_frame, channels="BGR", use_container_width=True)
             text_placeholder.markdown(f"<div style='background-color: {sidebar_color}; padding: 30px; border-radius: 10px;'><h1 style='text-align: center; font-size: 80px; color: {primary_color}; margin:0;'>{letter}</h1></div>", unsafe_allow_html=True)
 
-            MISS_TOLERANCE = 3  
+            MISS_TOLERANCE = 5  
 
             if run_detection:
                 conf_percent = conf * 100
