@@ -1,10 +1,10 @@
-[![SignLens](assets/logo.png)](assets/Logo.png)
+[![Signify](assets/logo.png)](assets/Logo.png)
 
-# 🤟 SignLens
+# 🤟 Signify
 
 **Sign Language → Text → Speech.**
 
-SignLens is a real-time sign language recognition app that turns hand gestures into a spoken sentence. It didn't start out this way — the architecture below is the result of a series of experiments and pivots, which is worth understanding before diving into the code.
+Signify is a real-time sign language recognition app that turns hand gestures into a spoken sentence. It didn't start out this way — the architecture below is the result of a series of experiments and pivots, which is worth understanding before diving into the code.
 
 > We didn't abandon YOLO; we changed its job.
 
@@ -28,7 +28,7 @@ SignLens is a real-time sign language recognition app that turns hand gestures i
 
 **From predictions to sentences.** Live video predicts every frame, and single frames can be noisy. A stabilizer sits between raw predictions and the sentence builder, so a gesture is only accepted once it's stable and confident enough — not on every frame's raw guess.
 
-**From sentences to speech.** The finished sentence is passed to **ElevenLabs** for text-to-speech, and the whole thing is wrapped in a **Streamlit** app — taking SignLens from research notebooks to a usable sign → text → speech pipeline.
+**From sentences to speech.** The finished sentence is passed to **ElevenLabs** for text-to-speech, and the whole thing is wrapped in a **Streamlit** app — taking Signify from research notebooks to a usable sign → text → speech pipeline.
 
 ---
 
@@ -77,7 +77,7 @@ flowchart TD
 ## 📁 Project Structure
 
 ```
-SignLens/
+Signify/
 │
 ├── app/
 │   ├── main.py                 # Streamlit application entry point
@@ -125,8 +125,8 @@ YOLO (Ultralytics) · MediaPipe Hands · PyTorch (original classifier) · Tensor
 ## ⚙️ Setup
 
 ```bash
-git clone https://github.com/Usf132/SignLens.git
-cd SignLens
+git clone https://github.com/Usf132/Signify.git
+cd Signify
 pip install -r requirements.txt
 cp .env.example .env   # add your ElevenLabs API key
 ```
