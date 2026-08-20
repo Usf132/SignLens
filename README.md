@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.jpeg" alt="Signfy logo" width="260">
+  <img src="assets\logo.png" alt="Signfy logo" width="260">
 </p>
 
 # Signfy

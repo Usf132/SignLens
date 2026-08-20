@@ -17,7 +17,7 @@ st.set_page_config(
 )
 
 
-st.sidebar.image("assets\\Logo.png", use_container_width=True)
+st.sidebar.image("assets\\L2.png", use_container_width=True)
 
 
 with st.sidebar:
