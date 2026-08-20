@@ -110,7 +110,7 @@ Signify/
 │   └── training_curves.png
 │
 ├── assets/
-│   └── logo.png
+│   └── Logo.png
 │
 ├── .env.example
 ├── requirements.txt
