@@ -1,4 +1,4 @@
-[![Signify](assets/logo.png)](assets/Logo.png)
+[![Signify](assets/Logo.png)](assets/Logo.png)
 
 # 🤟 Signify
 
