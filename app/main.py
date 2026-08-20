@@ -386,7 +386,6 @@ elif page == " Upload Video":
                 vid_place.image(st.session_state.last_video_frame, channels="BGR", use_container_width=True)
 
 elif page == "Translate an Image":
-    # 1. الديزاين بتاع العنوان عشان يبقى شبه الباقي
     box_html = """
     <div style="border: 2px solid #1ba1c2; padding: 15px; border-radius: 25px; text-align: center; background-color: transparent;">
         <h2 style="color: #1ba1c2; margin: 0;">Translate an Image</h2>
@@ -403,7 +402,6 @@ elif page == "Translate an Image":
         
         image = Image.open(uploaded_image)
         
-        # 2. تقسيم الشاشة لعمودين زي اللايف والفيديو
         col_img, col_txt = st.columns([2, 1])
         
         with col_img:
@@ -417,33 +415,25 @@ elif page == "Translate an Image":
             st.subheader("Translation Output")
             txt_place = st.empty()
 
-        # 3. تشغيل الموديل وقت ما يدوس على الزرار
         if translate_btn:
             with st.spinner("Processing image..."):
-                # تحويل الصورة لـ numpy array ثم لـ BGR عشان OpenCV والموديل
                 img_array = np.array(image)
                 
-                # التأكد من تحويل الألوان صح (لو الصورة أبيض وإسود أو فيها مشكلة)
-                if len(img_array.shape) == 2: # لو أبيض وإسود
+                if len(img_array.shape) == 2: 
                     img_array = cv2.cvtColor(img_array, cv2.COLOR_GRAY2RGB)
-                elif img_array.shape[2] == 4: # لو فيها خلفية شفافة PNG
                     img_array = cv2.cvtColor(img_array, cv2.COLOR_RGBA2RGB)
                     
                 img_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
 
-                # تشغيل الموديل بتاعك الفعلي
                 annotated_frame, letter, conf = predict_asl_sign_lm(img_bgr, confidence)
                 
-                # تحويل الصورة المتعدلة تاني لـ RGB عشان Streamlit يعرضها بألوان صح
                 annotated_frame_rgb = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
                 
-                # عرض الصورة اللي طالعة من الموديل
                 img_place.image(annotated_frame_rgb, caption='Processed Image', use_container_width=True)
                 
-                # عرض النتيجة بنفس ستايل المربع بتاع اللايف
                 if letter:
                     txt_place.markdown(f"<div style='background-color: {sidebar_color}; padding: 30px; border-radius: 10px;'><h1 style='text-align: center; font-size: 80px; color: {primary_color}; margin:0;'>{letter}</h1></div>", unsafe_allow_html=True)
-                    st.success(f"✅ Successfully detected: **{letter.title()}** (Confidence: {conf*100:.1f}%)")
+                    st.success(f"Successfully detected: **{letter.title()}** (Confidence: {conf*100:.1f}%)")
                 else:
                     txt_place.markdown(f"<div style='background-color: {sidebar_color}; padding: 30px; border-radius: 10px;'><h1 style='text-align: center; font-size: 50px; color: {primary_color}; margin:0;'>?</h1></div>", unsafe_allow_html=True)
                     st.warning("No clear hand sign detected in the image.")
