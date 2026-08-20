@@ -7,6 +7,7 @@ import time
 import plotly.graph_objects as go
 import toml
 from backend import predict_asl_sign_lm, Text_to_speech
+from PIL import Image
 
 st.set_page_config(initial_sidebar_state="collapsed")
 
@@ -26,7 +27,7 @@ with st.sidebar:
     st.sidebar.divider()
 
     page = st.radio('Select Department:',
-                   [" Live Translation", " Upload Video"," Text to Audio"])
+                   [" Live Translation", " Upload Video"," Text to Audio","Translate an Image"])
 
     st.divider()
 
@@ -235,11 +236,9 @@ if page == " Live Translation":
                             st.session_state.letter_counter = 0
                             st.session_state.last_detected_letter = ""
                         else:
-                            # السر هنا: ضيفنا الحرف فوراً بدون أي شروط تمنع التكرار
                             st.session_state.sequence.append(letter)
                 else:
                     st.session_state.miss_streak += 1
-                    # قللنا الرقم ده لـ 3 عشان أول ما تنزل إيدك يصفر العداد في جزء من الثانية
                     if st.session_state.miss_streak > 3:  
                         st.session_state.letter_counter = 0
                         st.session_state.last_detected_letter = ""
@@ -386,34 +385,65 @@ elif page == " Upload Video":
             elif st.session_state.last_video_frame is not None:
                 vid_place.image(st.session_state.last_video_frame, channels="BGR", use_container_width=True)
 
-elif page == " Text to Audio":
+elif page == "Translate an Image":
+    # 1. الديزاين بتاع العنوان عشان يبقى شبه الباقي
     box_html = """
-        <div style="border: 2px solid #1ba1c2; padding: 15px; border-radius: 25px; text-align: center; background-color: transparent;">
-            <h2 style="color: #1ba1c2; margin: 0;">Text to Audio</h2>
-        </div>
-        """
+    <div style="border: 2px solid #1ba1c2; padding: 15px; border-radius: 25px; text-align: center; background-color: transparent;">
+        <h2 style="color: #1ba1c2; margin: 0;">Translate an Image</h2>
+    </div>
+    """
     st.markdown(box_html, unsafe_allow_html=True)
-    st.header("Convert Text to Speech")
+    st.header("Upload Image for Translation")
 
-    st.write("Type any English text below and convert it to lifelike speech using the selected voice.")
+    st.write("Upload an image of a hand sign to translate it.")
 
-   
-    user_text = st.text_area("Enter your text here:", height=200, placeholder="Type something like: Hello, how are you today?")
+    uploaded_image = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
 
-  
-    col_empty1, col_btn, col_empty2 = st.columns([1, 2, 1])
+    if uploaded_image is not None:
+        
+        image = Image.open(uploaded_image)
+        
+        # 2. تقسيم الشاشة لعمودين زي اللايف والفيديو
+        col_img, col_txt = st.columns([2, 1])
+        
+        with col_img:
+            img_place = st.empty()
+            img_place.image(image, caption='Uploaded Image', use_container_width=True)
+            
+            # زرار الترجمة
+            translate_btn = st.button("Translate Image", icon=":material/image_search:", use_container_width=True)
 
-    with col_btn:
-        if st.button("Generate & Play Audio", icon=":material/volume_up:", use_container_width=True):
-            if user_text.strip():
-                with st.spinner(f"Generating audio ({selected_voice_label})..."):
-              
-                    audio_data = Text_to_speech(user_text.strip(), st.session_state.selected_voice_id)
+        with col_txt:
+            st.subheader("Translation Output")
+            txt_place = st.empty()
+
+        # 3. تشغيل الموديل وقت ما يدوس على الزرار
+        if translate_btn:
+            with st.spinner("Processing image..."):
+                # تحويل الصورة لـ numpy array ثم لـ BGR عشان OpenCV والموديل
+                img_array = np.array(image)
+                
+                # التأكد من تحويل الألوان صح (لو الصورة أبيض وإسود أو فيها مشكلة)
+                if len(img_array.shape) == 2: # لو أبيض وإسود
+                    img_array = cv2.cvtColor(img_array, cv2.COLOR_GRAY2RGB)
+                elif img_array.shape[2] == 4: # لو فيها خلفية شفافة PNG
+                    img_array = cv2.cvtColor(img_array, cv2.COLOR_RGBA2RGB)
                     
-                    if audio_data:
-                        st.success("Audio generated successfully!")
-                        st.audio(audio_data, format="audio/mp3", autoplay=True)
-                    else:
-                        st.error("Error generating audio. Check API key.")
-            else:
-                st.warning("Please enter some text first!")
+                img_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+
+                # تشغيل الموديل بتاعك الفعلي
+                annotated_frame, letter, conf = predict_asl_sign_lm(img_bgr, confidence)
+                
+                # تحويل الصورة المتعدلة تاني لـ RGB عشان Streamlit يعرضها بألوان صح
+                annotated_frame_rgb = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
+                
+                # عرض الصورة اللي طالعة من الموديل
+                img_place.image(annotated_frame_rgb, caption='Processed Image', use_container_width=True)
+                
+                # عرض النتيجة بنفس ستايل المربع بتاع اللايف
+                if letter:
+                    txt_place.markdown(f"<div style='background-color: {sidebar_color}; padding: 30px; border-radius: 10px;'><h1 style='text-align: center; font-size: 80px; color: {primary_color}; margin:0;'>{letter}</h1></div>", unsafe_allow_html=True)
+                    st.success(f"✅ Successfully detected: **{letter.title()}** (Confidence: {conf*100:.1f}%)")
+                else:
+                    txt_place.markdown(f"<div style='background-color: {sidebar_color}; padding: 30px; border-radius: 10px;'><h1 style='text-align: center; font-size: 50px; color: {primary_color}; margin:0;'>?</h1></div>", unsafe_allow_html=True)
+                    st.warning("No clear hand sign detected in the image.")
