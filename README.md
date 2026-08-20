@@ -20,6 +20,10 @@ Signify is a real-time sign language recognition app that turns hand gestures in
 * **Sentence Builder** — maintains the generated sentence as gestures are accepted.
 * **Text-to-Speech** — ElevenLabs converts the generated sentence into speech.
 * **Streamlit App** — supports live camera translation and video upload.
+  
+---
+
+## 🎥 Demo / Screenshots
 
 ---
 
