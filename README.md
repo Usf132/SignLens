@@ -1,7 +1,4 @@
-<p align="center">
-  <img src="assets/L1.png" alt="Signfy logo" width="260">
-</p>
-
+[![Signify](assets/L1.png)](assets/L1.png)
 # Signify
 
 Signfy is a computer-vision pipeline that recognizes American Sign Language (ASL) hand signs in real time and converts them into text and speech. It combines a YOLO hand detector, MediaPipe landmark extraction, and a TensorFlow classifier, wrapped in a Streamlit app with live camera translation, video upload, and text-to-speech.
